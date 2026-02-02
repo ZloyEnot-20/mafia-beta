@@ -1,0 +1,60 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: mafia-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - mafia-network
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mafia-server
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - CORS_ORIGIN=http://localhost:5173,http://192.168.1.5:5173,http://localhost:3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - MIN_PLAYERS=4
+      - MAX_PLAYERS=16
+      - NIGHT_DURATION=30
+      - DISCUSSION_DURATION=60
+      - INDIVIDUAL_DISCUSSION_DURATION=15
+      - DAY_DURATION=60
+      - VOTING_DURATION=30
+      - INDIVIDUAL_VOTING_DURATION=15
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - mafia-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  mafia-network:
+    driver: bridge
