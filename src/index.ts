@@ -50,7 +50,6 @@ const corsOptions = {
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
-const BOT_TOKEN = process.env.BOT_TOKEN;
 
 app.use(cors(corsOptions));
 app.use(express.json());
