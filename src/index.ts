@@ -15,22 +15,31 @@ const app = express();
 const httpServer = createServer(app);
 
 // CORS configuration
-const allowedOrigins = process.env.CORS_ORIGIN 
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : ["http://localhost:5173", "http://192.168.1.5:5173", "http://localhost:3000"];
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+  : [
+      "http://localhost:5173",
+      "http://192.168.1.5:5173",
+      "http://localhost:3000",
+    ];
 
 const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+  origin: (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes("*")) {
       callback(null, true);
     } else {
       // Allow any localhost or local network IP
-      if (origin.match(/^http:\/\/localhost:\d+$/) || 
-          origin.match(/^http:\/\/192\.168\.\d+\.\d+:\d+$/) ||
-          origin.match(/^http:\/\/127\.0\.0\.1:\d+$/)) {
+      if (
+        origin.match(/^http:\/\/localhost:\d+$/) ||
+        origin.match(/^http:\/\/192\.168\.\d+\.\d+:\d+$/) ||
+        origin.match(/^http:\/\/127\.0\.0\.1:\d+$/)
+      ) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
@@ -41,6 +50,7 @@ const corsOptions = {
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
+const BOT_TOKEN = process.env.BOT_TOKEN;
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -50,20 +60,77 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+app.post("/getMessageId", async (req: any, res: any) => {
+  try {
+    const { roomId, userId } = req.body;
+    if (!roomId) {
+      return res.status(400).json({ error: "Missing roomId" });
+    }
+
+    // Создаём подготовленное сообщение через Bot API
+    const response = await fetch(
+      `https://api.telegram.org/bot${BOT_TOKEN}/savePreparedInlineMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          web_app_name: "mafia",
+          allow_user_chats: true,
+          allow_group_chats: true,
+          result: {
+            type: "article",
+            id: roomId,
+            title: "Приглашение в Мафию",
+            input_message_content: {
+              message_text: `🎮 <b>Заходи ко мне поиграть в Мафию!</b>\nНомер комнаты: <code>${roomId}</code>`,
+              parse_mode: "HTML",
+            },
+          },
+        }),
+      },
+    );
+
+    const data = (await response.json()) as any;
+
+    if (!data.ok || !data.result?.id) {
+      return res.status(500).json({ error: JSON.stringify(data) });
+    }
+
+    // Возвращаем id подготовленного сообщения
+    res.json({
+      status: "ok",
+      messageId: data.result.id,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // Initialize Socket.IO
 const io = new Server(httpServer, {
   cors: {
-    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       // Allow requests with no origin
       if (!origin) return callback(null, true);
-      
-      if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes("*")) {
+
+      if (
+        allowedOrigins.indexOf(origin) !== -1 ||
+        allowedOrigins.includes("*")
+      ) {
         callback(null, true);
       } else {
         // Allow any localhost or local network IP
-        if (origin.match(/^http:\/\/localhost:\d+$/) || 
-            origin.match(/^http:\/\/192\.168\.\d+\.\d+:\d+$/) ||
-            origin.match(/^http:\/\/127\.0\.0\.1:\d+$/)) {
+        if (
+          origin.match(/^http:\/\/localhost:\d+$/) ||
+          origin.match(/^http:\/\/192\.168\.\d+\.\d+:\d+$/) ||
+          origin.match(/^http:\/\/127\.0\.0\.1:\d+$/)
+        ) {
           callback(null, true);
         } else {
           callback(new Error("Not allowed by CORS"));
@@ -91,7 +158,7 @@ httpServer.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 Socket.IO server ready`);
   console.log(`🌍 CORS enabled for: ${corsOptions.origin}`);
-  
+
   // Test Redis connection
   try {
     const pingResult = await redisService.ping();
