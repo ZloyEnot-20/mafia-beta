@@ -308,6 +308,8 @@ export class GameTimer {
 
   private async endGame(room: Room, winner: "mafia" | "town"): Promise<void> {
     this.stopTimer(room.getCode());
+    // Mark room as ended
+    room.setIsEnded(true);
     this.io.to(room.getCode()).emit("game:ended", {
       winner,
       players: room.getAllPlayers(),

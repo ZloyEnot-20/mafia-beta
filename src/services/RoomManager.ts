@@ -110,8 +110,15 @@ export class RoomManager {
         }
       }
       
-      // Verify player is still in the room
+      // Verify player is still in the room and room is not ended
       if (room) {
+        // Don't return ended rooms for reconnection
+        if (room.getIsEnded()) {
+          // Clean up mapping for ended rooms
+          await this.redis.removePlayerRoom(playerId);
+          this.playerToRoom.delete(playerId);
+          return null;
+        }
         const player = room.getPlayer(playerId);
         if (player) {
           return { roomCode, room };
@@ -128,6 +135,13 @@ export class RoomManager {
     if (memoryRoomCode) {
       const room = this.rooms.get(memoryRoomCode);
       if (room) {
+        // Don't return ended rooms for reconnection
+        if (room.getIsEnded()) {
+          // Clean up mapping for ended rooms
+          await this.redis.removePlayerRoom(playerId);
+          this.playerToRoom.delete(playerId);
+          return null;
+        }
         const player = room.getPlayer(playerId);
         if (player) {
           return { roomCode: memoryRoomCode, room };

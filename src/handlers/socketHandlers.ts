@@ -82,6 +82,43 @@ export function setupSocketHandlers(
       }
     });
 
+    // Room: Check On Entry - Check if player has an active room when entering the app
+    socket.on("room:check-on-entry", async (playerId: string) => {
+      try {
+        console.log(`Checking active room on entry for player: ${playerId}`);
+        const activeRoom = await roomManager.getActiveRoomForPlayer(playerId);
+        
+        if (activeRoom) {
+          const { roomCode, room } = activeRoom;
+          const player = room.getPlayer(playerId);
+          
+          if (player) {
+            console.log(`Active room found on entry for player ${playerId}: ${roomCode}`);
+            socket.emit("room:check-result", {
+              hasActiveRoom: true,
+              roomCode,
+              playerName: player.name,
+            });
+          } else {
+            console.log(`Player ${playerId} not found in room ${roomCode}`);
+            socket.emit("room:check-result", {
+              hasActiveRoom: false,
+            });
+          }
+        } else {
+          console.log(`No active room found on entry for player: ${playerId}`);
+          socket.emit("room:check-result", {
+            hasActiveRoom: false,
+          });
+        }
+      } catch (error) {
+        console.error("Error checking active room on entry:", error);
+        socket.emit("room:check-result", {
+          hasActiveRoom: false,
+        });
+      }
+    });
+
     // Room: Create
     socket.on("room:create", async (playerName: string, playerId?: string) => {
       try {

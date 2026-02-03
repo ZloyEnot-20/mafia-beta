@@ -40,6 +40,7 @@ export interface GameRoom {
   }>;
   votes?: Record<string, string>; // voterId -> targetId
   nightActions?: Record<string, string>; // playerId -> targetId
+  isEnded?: boolean; // true if game has ended
 }
 
 export interface DiscussionState {

@@ -24,6 +24,7 @@ export class Room {
   }>;
   private createdAt: number; // Unix timestamp in milliseconds
   private connectedSockets: Map<string, string>; // playerId -> socketId (to track connections)
+  private isEnded: boolean; // true if game has ended
 
   constructor(hostId: string, hostName: string, settings: GameSettings) {
     this.id = uuidv4();
@@ -40,6 +41,7 @@ export class Room {
     this.chatMessages = [];
     this.createdAt = Date.now(); // Set creation timestamp
     this.connectedSockets = new Map();
+    this.isEnded = false;
 
     // Add host as first player
     this.addPlayer(hostId, hostName, true);
@@ -439,6 +441,14 @@ export class Room {
     return this.createdAt;
   }
 
+  setIsEnded(ended: boolean): void {
+    this.isEnded = ended;
+  }
+
+  getIsEnded(): boolean {
+    return this.isEnded;
+  }
+
   toGameRoom(): GameRoom {
     // Convert Maps to objects for JSON serialization
     const votes: Record<string, string> = {};
@@ -467,6 +477,7 @@ export class Room {
       chatMessages: this.chatMessages,
       votes,
       nightActions,
+      isEnded: this.isEnded,
     };
   }
   
@@ -483,6 +494,7 @@ export class Room {
     room.settings = data.settings;
     room.discussionState = data.discussionState || null;
     room.chatMessages = data.chatMessages || [];
+    room.isEnded = data.isEnded || false;
     
     // Restore players
     data.players.forEach((player) => {

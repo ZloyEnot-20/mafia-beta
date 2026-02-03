@@ -11,6 +11,7 @@ export interface ServerToClientEvents {
   "room:host-changed": (hostId: string) => void;
   "room:active-found": (data: { roomCode: string; playerName: string }) => void; // Active room found for player
   "room:no-active": () => void; // No active room found
+  "room:check-result": (data: { hasActiveRoom: boolean; roomCode?: string; playerName?: string }) => void; // Result of room check on entry
 
   // Game state events
   "game:started": (data: { players: Player[] }) => void;
@@ -63,6 +64,7 @@ export interface ClientToServerEvents {
   "room:join": (data: { roomCode: string; playerName: string; playerId?: string }) => void;
   "room:leave": () => void;
   "room:check-active": (playerId: string) => void; // Check if player has active room
+  "room:check-on-entry": (playerId: string) => void; // Check if player has active room on app entry
 
   // Game events
   "game:start": () => void;
