@@ -60,54 +60,54 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.post("/getMessageId", async (req: any, res: any) => {
-  try {
-    const { roomId, userId } = req.body;
-    if (!roomId) {
-      return res.status(400).json({ error: "Missing roomId" });
-    }
+// app.post("/getMessageId", async (req: any, res: any) => {
+//   try {
+//     const { roomId, userId } = req.body;
+//     if (!roomId) {
+//       return res.status(400).json({ error: "Missing roomId" });
+//     }
 
-    // Создаём подготовленное сообщение через Bot API
-    const response = await fetch(
-      `https://api.telegram.org/bot${BOT_TOKEN}/savePreparedInlineMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: userId,
-          web_app_name: "mafia",
-          allow_user_chats: true,
-          allow_group_chats: true,
-          result: {
-            type: "article",
-            id: roomId,
-            title: "Приглашение в Мафию",
-            input_message_content: {
-              message_text: `🎮 <b>Заходи ко мне поиграть в Мафию!</b>\nНомер комнаты: <code>${roomId}</code>`,
-              parse_mode: "HTML",
-            },
-          },
-        }),
-      },
-    );
+//     // Создаём подготовленное сообщение через Bot API
+//     const response = await fetch(
+//       `https://api.telegram.org/bot${BOT_TOKEN}/savePreparedInlineMessage`,
+//       {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({
+//           user_id: userId,
+//           web_app_name: "mafia",
+//           allow_user_chats: true,
+//           allow_group_chats: true,
+//           result: {
+//             type: "article",
+//             id: roomId,
+//             title: "Приглашение в Мафию",
+//             input_message_content: {
+//               message_text: `🎮 <b>Заходи ко мне поиграть в Мафию!</b>\nНомер комнаты: <code>${roomId}</code>`,
+//               parse_mode: "HTML",
+//             },
+//           },
+//         }),
+//       },
+//     );
 
-    const data = (await response.json()) as any;
+//     const data = (await response.json()) as any;
 
-    if (!data.ok || !data.result?.id) {
-      return res.status(500).json({ error: JSON.stringify(data) });
-    }
+//     if (!data.ok || !data.result?.id) {
+//       return res.status(500).json({ error: JSON.stringify(data) });
+//     }
 
-    // Возвращаем id подготовленного сообщения
-    res.json({
-      status: "ok",
-      messageId: data.result.id,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
+//     // Возвращаем id подготовленного сообщения
+//     res.json({
+//       status: "ok",
+//       messageId: data.result.id,
+//       timestamp: new Date().toISOString(),
+//     });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// });
 
 // Initialize Socket.IO
 const io = new Server(httpServer, {
