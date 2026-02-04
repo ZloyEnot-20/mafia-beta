@@ -203,6 +203,8 @@ export function setupSocketHandlers(
         }
 
         // Set socket connection using the correct playerId
+        // Check if player was connected before (for reconnection detection) - MUST check BEFORE setting connection
+        const wasConnected = roomResult.isPlayerConnected(playerId);
         roomResult.setSocketConnection(playerId, socket.id);
         socket.join(normalizedCode);
         const roomSettings = roomResult.getSettings();
@@ -210,13 +212,17 @@ export function setupSocketHandlers(
         // Ensure player-room mapping is saved to Redis (for reconnection)
         await redisService.setPlayerRoom(playerId, normalizedCode);
         
-        console.log(`Successfully joined room ${normalizedCode}, playerId: ${playerId}, phase: ${roomResult.getPhase()}`);
+        console.log(`Successfully joined room ${normalizedCode}, playerId: ${playerId}, phase: ${roomResult.getPhase()}, wasConnected: ${wasConnected}, isReconnecting: ${isReconnecting}`);
         
-        // If game has started and player was disconnected, notify reconnection
-        if (roomResult.getPhase() !== "lobby" || isReconnecting) {
+        // If game has started and player was disconnected (not left), notify reconnection
+        // Only send reconnection message if:
+        // 1. Game has started (not lobby)
+        // 2. Player exists in room (isReconnecting = true)
+        // 3. Player was NOT connected before (wasConnected = false) - means they were disconnected, not left
+        if (roomResult.getPhase() !== "lobby" && isReconnecting && !wasConnected) {
           const player = roomResult.getPlayer(playerId);
           if (player) {
-            // Send system message about reconnection
+            // Send system message about reconnection only if player was disconnected
             const reconnectMessage = {
               id: uuidv4(),
               senderId: "system",
@@ -356,6 +362,9 @@ export function setupSocketHandlers(
       const leavingPlayer = leavingPlayerId ? roomBeforeLeave?.getPlayer(leavingPlayerId) : null;
       
       if (leavingPlayerId) {
+        // Remove player-room mapping from Redis to prevent auto-reconnection
+        await redisService.removePlayerRoom(leavingPlayerId);
+        
         const room = await roomManager.leaveRoom(leavingPlayerId);
         if (room) {
           socket.leave(room.getCode());
