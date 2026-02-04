@@ -376,6 +376,16 @@ export function setupSocketHandlers(
       }
     });
 
+    // Room: Delete
+    socket.on("room:delete", async () => {
+      const playerInfo = findPlayerIdBySocket(socket.id, roomManager);
+      if (!playerInfo || !playerInfo.room) {
+        socket.emit("error", "Вы не в комнате");
+        return;
+      }
+      await roomManager.deleteRoom(playerInfo.room.getCode());
+    });
+
     // Game: Start
     socket.on("game:start", async () => {
       const playerInfo = findPlayerIdBySocket(socket.id, roomManager);

@@ -258,6 +258,12 @@ export class RoomManager {
 
     return room;
   }
+
+  async deleteRoom(roomCode: string): Promise<void> {
+    await this.redis.deleteRoom(roomCode);
+    this.rooms.delete(roomCode);
+    this.playerToRoom.delete(roomCode);
+  }
   
   async saveRoomState(room: Room): Promise<void> {
     // Save room state to Redis with appropriate TTL

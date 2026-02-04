@@ -63,6 +63,7 @@ export interface ClientToServerEvents {
   "room:create": (playerName: string, playerId?: string) => void;
   "room:join": (data: { roomCode: string; playerName: string; playerId?: string }) => void;
   "room:leave": () => void;
+  "room:delete": () => void;
   "room:check-active": (playerId: string) => void; // Check if player has active room
   "room:check-on-entry": (playerId: string) => void; // Check if player has active room on app entry
 
