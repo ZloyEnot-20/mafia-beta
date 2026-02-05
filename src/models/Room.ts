@@ -160,18 +160,23 @@ export class Room {
       // Medium games (7-9 players): 2 mafia, 1 МСР (either doctor or sheriff)
       mafiaCount = 2;
       // Randomly choose one МСР role
-      hasDoctor = Math.random() < 0.5;
-      hasSheriff = !hasDoctor;
+      // hasDoctor = Math.random() < 0.5;
+      // hasSheriff = !hasDoctor;
+      hasDoctor = false;
+      hasSheriff = false;
+
     } else if (playerCount <= 12) {
       // Large games (10-12 players): 3 mafia, both МСР
       mafiaCount = 3;
-      hasDoctor = true;
-      hasSheriff = true;
+      // TODO: Randomly choose one МСР role
+      hasDoctor = false;
+      hasSheriff = false;
     } else {
       // Very large games (13-16 players): 4 mafia, both МСР
       mafiaCount = 4;
-      hasDoctor = true;
-      hasSheriff = true;
+      // TODO: Randomly choose one МСР role
+      hasDoctor = false;
+      hasSheriff = false;
     }
 
     let index = 0;
@@ -214,10 +219,48 @@ export class Room {
     checkedRole?: Role;
   } {
     const actions = Array.from(this.nightActions.entries());
-    const mafiaAction = actions.find(([id]) => {
+    
+    // Get all mafia actions (votes)
+    const mafiaActions = actions.filter(([id]) => {
       const player = this.players.get(id);
       return player?.role === "mafia";
     });
+    
+    // Get mafia players count
+    const mafiaPlayers = Array.from(this.players.values()).filter(p => p.role === "mafia" && p.isAlive);
+    
+    let killedId: string | null = null;
+    
+    // If there are multiple mafia players, use voting logic
+    if (mafiaPlayers.length > 1 && mafiaActions.length > 0) {
+      // Count votes for each target
+      const voteCounts: Record<string, number> = {};
+      mafiaActions.forEach(([_, targetId]) => {
+        if (targetId) {
+          voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+        }
+      });
+      
+      // Find target(s) with maximum votes
+      const maxVotes = Math.max(...Object.values(voteCounts), 0);
+      const targetsWithMaxVotes = Object.entries(voteCounts)
+        .filter(([_, count]) => count === maxVotes)
+        .map(([targetId]) => targetId);
+      
+      // If there's a clear winner (one target with most votes), use it
+      // If there's a tie (multiple targets with same max votes), pick randomly
+      if (targetsWithMaxVotes.length === 1) {
+        killedId = targetsWithMaxVotes[0];
+      } else if (targetsWithMaxVotes.length > 1) {
+        // Random selection from tied targets
+        const randomIndex = Math.floor(Math.random() * targetsWithMaxVotes.length);
+        killedId = targetsWithMaxVotes[randomIndex];
+      }
+    } else if (mafiaActions.length > 0) {
+      // Single mafia player, use their action directly
+      killedId = mafiaActions[0][1];
+    }
+    
     const doctorAction = actions.find(([id]) => {
       const player = this.players.get(id);
       return player?.role === "doctor";
@@ -227,7 +270,6 @@ export class Room {
       return player?.role === "sheriff";
     });
 
-    const killedId = mafiaAction ? mafiaAction[1] : null;
     const savedId = doctorAction ? doctorAction[1] : null;
     const checkedId = sheriffAction ? sheriffAction[1] : undefined;
     const checkedRole = checkedId ? this.players.get(checkedId)?.role : undefined;
