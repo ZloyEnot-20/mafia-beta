@@ -602,7 +602,7 @@ export function setupSocketHandlers(
       }
 
       // If it's individual voting phase, move to next voter immediately after vote
-      const discussionState = room.getDiscussionState();
+      // Reuse discussionState from above (line 559)
       if (discussionState?.isIndividualPhase && discussionState.currentSpeakerId === playerId) {
         const hasNext = room.nextVoter();
         if (hasNext) {
