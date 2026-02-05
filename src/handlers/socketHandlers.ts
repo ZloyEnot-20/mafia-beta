@@ -265,7 +265,9 @@ export function setupSocketHandlers(
           }
           
           // Send discussion state if exists
+          // For voting phase, discussionState is actually voting state
           if (discussionState) {
+            // Always send discussion:started to restore the state
             socket.emit("discussion:started", discussionState);
             if (discussionState.currentSpeakerId) {
               socket.emit("discussion:speaker-changed", {

@@ -72,7 +72,20 @@ export class GameTimer {
     // Check for game end
     const winner = room.checkGameEnd();
     if (winner) {
-      await this.endGame(room, winner);
+      // Store last night result before ending game
+      room.setLastNightResult({
+        killedId: result.killedId,
+        savedId: result.savedId,
+      });
+      // Emit last night result before game end
+      this.io.to(room.getCode()).emit("game:last-night-result", {
+        killedId: result.killedId,
+        savedId: result.savedId,
+      });
+      // Wait a bit before ending game to show night result modal
+      setTimeout(async () => {
+        await this.endGame(room, winner);
+      }, 5000);
       return;
     }
 
@@ -273,7 +286,22 @@ export class GameTimer {
     // Check for game end
     const winner = room.checkGameEnd();
     if (winner) {
-      await this.endGame(room, winner);
+      // Store last voting result before ending game
+      room.setLastVotingResult({
+        eliminatedId: result.eliminatedId,
+        isTie: result.isTie,
+        votes: result.votes,
+      });
+      // Emit last voting result before game end
+      this.io.to(room.getCode()).emit("game:last-voting-result", {
+        eliminatedId: result.eliminatedId,
+        isTie: result.isTie,
+        votes: result.votes,
+      });
+      // Wait a bit before ending game to show voting result modal
+      setTimeout(async () => {
+        await this.endGame(room, winner);
+      }, 5000);
       return;
     }
 

@@ -24,6 +24,8 @@ export interface ServerToClientEvents {
   "game:player-eliminated": (data: { playerId: string; role?: Role }) => void;
   "game:players-updated": (data: { players: Player[] }) => void;
   "game:ended": (data: { winner: "mafia" | "town"; players: Player[] }) => void;
+  "game:last-voting-result": (data: { eliminatedId: string | null; isTie: boolean; votes: Record<string, number> }) => void;
+  "game:last-night-result": (data: { killedId: string | null; savedId: string | null }) => void;
 
   // Discussion events
   "discussion:started": (data: DiscussionState) => void;

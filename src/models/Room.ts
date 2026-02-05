@@ -25,6 +25,8 @@ export class Room {
   private createdAt: number; // Unix timestamp in milliseconds
   private connectedSockets: Map<string, string>; // playerId -> socketId (to track connections)
   private isEnded: boolean; // true if game has ended
+  private lastVotingResult: { eliminatedId: string | null; isTie: boolean; votes: Record<string, number> } | null; // Last voting result before game end
+  private lastNightResult: { killedId: string | null; savedId: string | null } | null; // Last night result before game end
 
   constructor(hostId: string, hostName: string, settings: GameSettings) {
     this.id = uuidv4();
@@ -443,6 +445,22 @@ export class Room {
 
   setIsEnded(ended: boolean): void {
     this.isEnded = ended;
+  }
+
+  setLastVotingResult(result: { eliminatedId: string | null; isTie: boolean; votes: Record<string, number> }): void {
+    this.lastVotingResult = result;
+  }
+
+  getLastVotingResult(): { eliminatedId: string | null; isTie: boolean; votes: Record<string, number> } | null {
+    return this.lastVotingResult;
+  }
+
+  setLastNightResult(result: { killedId: string | null; savedId: string | null }): void {
+    this.lastNightResult = result;
+  }
+
+  getLastNightResult(): { killedId: string | null; savedId: string | null } | null {
+    return this.lastNightResult;
   }
 
   getIsEnded(): boolean {
