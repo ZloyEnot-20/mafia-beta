@@ -259,19 +259,7 @@ export function setupSocketHandlers(
             });
           }
           
-          // Send game state events
-          socket.emit("game:phase-changed", {
-            phase: roomResult.getPhase(),
-            round: roomResult.getRound(),
-            endTime: roomResult.getEndTime()!,
-          });
-          
-          // Send role if assigned
-          if (player?.role) {
-            socket.emit("game:role-assigned", player.role);
-          }
-          
-          // Send discussion state if exists
+          // Send discussion state FIRST (before phase change) to ensure it's set before phase change
           // For voting phase, discussionState is actually voting state
           if (discussionState) {
             // Always send discussion:started to restore the state
@@ -285,27 +273,7 @@ export function setupSocketHandlers(
             }
           }
           
-          // Send night result if we're in discussion phase after night
-          if (roomResult.getPhase() === "discussion" && roomResult.getRound() > 1) {
-            // Get last night result from room if available
-            const lastNightResult = roomResult.getLastNightResult();
-            if (lastNightResult) {
-              socket.emit("action:night-result", lastNightResult);
-            }
-          }
-          
-          // Send all chat messages
-          chatMessages.forEach((msg) => {
-            socket.emit("chat:message", {
-              id: msg.id,
-              senderId: msg.senderId,
-              senderName: msg.senderName,
-              text: msg.text,
-              timestamp: msg.timestamp,
-              isSystem: msg.isSystem || false,
-            });
-          });
-          
+          // Send votes BEFORE phase change to prevent them from being cleared
           // Send votes if in voting phase
           if (roomResult.getPhase() === "voting") {
             const roomData = roomResult.toGameRoom();
@@ -320,6 +288,7 @@ export function setupSocketHandlers(
             }
           }
           
+          // Send night actions BEFORE phase change
           // Send night actions if in night phase and player is mafia
           if (roomResult.getPhase() === "night" && player?.role === "mafia") {
             const mafiaActions = Array.from(roomResult.getNightActions().entries())
@@ -343,6 +312,39 @@ export function setupSocketHandlers(
               voteCounts,
             });
           }
+          
+          // Send game state events AFTER votes and discussion state
+          socket.emit("game:phase-changed", {
+            phase: roomResult.getPhase(),
+            round: roomResult.getRound(),
+            endTime: roomResult.getEndTime()!,
+          });
+          
+          // Send role if assigned
+          if (player?.role) {
+            socket.emit("game:role-assigned", player.role);
+          }
+          
+          // Send night result if we're in discussion phase after night
+          if (roomResult.getPhase() === "discussion" && roomResult.getRound() > 1) {
+            // Get last night result from room if available
+            const lastNightResult = roomResult.getLastNightResult();
+            if (lastNightResult) {
+              socket.emit("action:night-result", lastNightResult);
+            }
+          }
+          
+          // Send all chat messages
+          chatMessages.forEach((msg) => {
+            socket.emit("chat:message", {
+              id: msg.id,
+              senderId: msg.senderId,
+              senderName: msg.senderName,
+              text: msg.text,
+              timestamp: msg.timestamp,
+              isSystem: msg.isSystem || false,
+            });
+          });
           
           // Also send updated players list to all players
           io.to(roomResult.getCode()).emit("game:players-updated", {
