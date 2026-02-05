@@ -601,6 +601,163 @@ export function setupSocketHandlers(
         });
       }
 
+      // If it's individual voting phase, move to next voter immediately after vote
+      const discussionState = room.getDiscussionState();
+      if (discussionState?.isIndividualPhase && discussionState.currentSpeakerId === playerId) {
+        const hasNext = room.nextVoter();
+        if (hasNext) {
+          const newState = room.getDiscussionState();
+          if (newState && newState.currentSpeakerId) {
+            // Move to next voter
+            io.to(room.getCode()).emit("discussion:speaker-changed", {
+              currentSpeakerId: newState.currentSpeakerId,
+              currentSpeakerIndex: newState.currentSpeakerIndex,
+              endTime: room.getEndTime()!,
+            });
+            // Restart timer for next voter
+            gameTimer.startTimer(room);
+          } else {
+            // No more voters, process voting
+            const result = room.processVoting();
+            io.to(room.getCode()).emit("action:vote-result", {
+              eliminatedId: result.eliminatedId,
+              votes: result.votes,
+              isTie: result.isTie,
+            });
+
+            if (result.eliminatedId) {
+              const eliminatedPlayer = room.getPlayer(result.eliminatedId);
+              io.to(room.getCode()).emit("game:player-eliminated", {
+                playerId: result.eliminatedId,
+                role: eliminatedPlayer?.role,
+              });
+            }
+
+            // Check for game end
+            const winner = room.checkGameEnd();
+            if (winner) {
+              // Store last voting result before ending game
+              room.setLastVotingResult({
+                eliminatedId: result.eliminatedId,
+                isTie: result.isTie,
+                votes: result.votes,
+              });
+              // Emit last voting result before game end
+              io.to(room.getCode()).emit("game:last-voting-result", {
+                eliminatedId: result.eliminatedId,
+                isTie: result.isTie,
+                votes: result.votes,
+              });
+              // Wait a bit before ending game to show voting result modal
+              setTimeout(async () => {
+                await gameTimer.endGame(room, winner);
+              }, 5000);
+              return;
+            }
+
+            // Send system message about night starting
+            const nightMessage = {
+              id: uuidv4(),
+              senderId: "system",
+              senderName: "Система",
+              text: "Наступает ночь. Город засыпает...",
+              timestamp: Date.now(),
+              isSystem: true,
+            };
+            room.addChatMessage("system", "Система", nightMessage.text, true);
+            io.to(room.getCode()).emit("chat:message", nightMessage);
+
+          // Move to night phase
+          room.startNextNight();
+          // Send updated players with connection status
+          const playersWithStatus = room.getAllPlayersWithConnectionStatus();
+          io.to(room.getCode()).emit("game:players-updated", {
+            players: playersWithStatus,
+          });
+          const nightDiscussionState = room.getDiscussionState();
+          if (nightDiscussionState) {
+            io.to(room.getCode()).emit("discussion:started", nightDiscussionState);
+          }
+          io.to(room.getCode()).emit("game:phase-changed", {
+            phase: room.getPhase(),
+            round: room.getRound(),
+            endTime: room.getEndTime()!,
+          });
+          await redisService.saveRoom(room, 86400);
+          gameTimer.startTimer(room);
+          }
+        } else {
+          // No more voters, process voting
+          const result = room.processVoting();
+          io.to(room.getCode()).emit("action:vote-result", {
+            eliminatedId: result.eliminatedId,
+            votes: result.votes,
+            isTie: result.isTie,
+          });
+
+          if (result.eliminatedId) {
+            const eliminatedPlayer = room.getPlayer(result.eliminatedId);
+            io.to(room.getCode()).emit("game:player-eliminated", {
+              playerId: result.eliminatedId,
+              role: eliminatedPlayer?.role,
+            });
+          }
+
+          // Check for game end
+          const winner = room.checkGameEnd();
+          if (winner) {
+            // Store last voting result before ending game
+            room.setLastVotingResult({
+              eliminatedId: result.eliminatedId,
+              isTie: result.isTie,
+              votes: result.votes,
+            });
+            // Emit last voting result before game end
+            io.to(room.getCode()).emit("game:last-voting-result", {
+              eliminatedId: result.eliminatedId,
+              isTie: result.isTie,
+              votes: result.votes,
+            });
+            // Wait a bit before ending game to show voting result modal
+            setTimeout(async () => {
+              await gameTimer.endGame(room, winner);
+            }, 5000);
+            return;
+          }
+
+          // Send system message about night starting
+          const nightMessage = {
+            id: uuidv4(),
+            senderId: "system",
+            senderName: "Система",
+            text: "Наступила ночь. Мафия просыпается...",
+            timestamp: Date.now(),
+            isSystem: true,
+          };
+          room.addChatMessage("system", "Система", nightMessage.text, true);
+          io.to(room.getCode()).emit("chat:message", nightMessage);
+
+          // Move to night phase
+          room.startNextNight();
+          // Send updated players with connection status
+          const playersWithStatus = room.getAllPlayersWithConnectionStatus();
+          io.to(room.getCode()).emit("game:players-updated", {
+            players: playersWithStatus,
+          });
+          const nightDiscussionState = room.getDiscussionState();
+          if (nightDiscussionState) {
+            io.to(room.getCode()).emit("discussion:started", nightDiscussionState);
+          }
+          io.to(room.getCode()).emit("game:phase-changed", {
+            phase: room.getPhase(),
+            round: room.getRound(),
+            endTime: room.getEndTime()!,
+          });
+          await redisService.saveRoom(room, 86400);
+          gameTimer.startTimer(room);
+        }
+      }
+
       // Save room state to Redis after vote
       await redisService.saveRoom(room, 86400);
     });
@@ -623,6 +780,10 @@ export function setupSocketHandlers(
         return;
       }
 
+      // Limit message length to prevent crashes (max 500 characters)
+      const maxLength = 500;
+      const messageText = text.length > maxLength ? text.substring(0, maxLength) : text;
+
       // During night phase, only mafia can send messages, and they should only be visible to mafia
       if (room.getPhase() === "night" && player.role === "mafia") {
         // Send message only to mafia players, don't save to room chat
@@ -630,7 +791,7 @@ export function setupSocketHandlers(
           id: uuidv4(),
           senderId: playerId,
           senderName: player.name,
-          text,
+          text: messageText,
           timestamp: Date.now(),
           isSystem: false,
         };
@@ -652,11 +813,11 @@ export function setupSocketHandlers(
           id: uuidv4(),
           senderId: playerId,
           senderName: player.name,
-          text,
+          text: messageText,
           timestamp: Date.now(),
           isSystem: false,
         };
-        room.addChatMessage(playerId, player.name, text);
+        room.addChatMessage(playerId, player.name, messageText);
         io.to(room.getCode()).emit("chat:message", message);
         // Save room state to Redis after chat message (only for active games)
         if (room.getPhase() !== "lobby") {

@@ -334,7 +334,7 @@ export class GameTimer {
     this.startTimer(room);
   }
 
-  private async endGame(room: Room, winner: "mafia" | "town"): Promise<void> {
+  async endGame(room: Room, winner: "mafia" | "town"): Promise<void> {
     this.stopTimer(room.getCode());
     // Mark room as ended
     room.setIsEnded(true);
