@@ -252,6 +252,13 @@ export function setupSocketHandlers(
             createdAt: roomResult.getCreatedAt(),
           });
           
+          // Send game:started if game has started (to restore game state)
+          if (roomResult.getPhase() !== "lobby" && roomResult.getPhase() !== "ended") {
+            socket.emit("game:started", {
+              players: playersWithStatus,
+            });
+          }
+          
           // Send game state events
           socket.emit("game:phase-changed", {
             phase: roomResult.getPhase(),
@@ -275,6 +282,15 @@ export function setupSocketHandlers(
                 currentSpeakerIndex: discussionState.currentSpeakerIndex,
                 endTime: roomResult.getEndTime()!,
               });
+            }
+          }
+          
+          // Send night result if we're in discussion phase after night
+          if (roomResult.getPhase() === "discussion" && roomResult.getRound() > 1) {
+            // Get last night result from room if available
+            const lastNightResult = roomResult.getLastNightResult();
+            if (lastNightResult) {
+              socket.emit("action:night-result", lastNightResult);
             }
           }
           
@@ -318,8 +334,11 @@ export function setupSocketHandlers(
               voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
             });
             
+            // Check if current player has performed night action
+            const hasPerformedAction = roomResult.getNightActions().has(playerId);
+            
             socket.emit("action:night-action-received" as any, {
-              actorId: playerId,
+              actorId: hasPerformedAction ? playerId : "",
               targetId: "",
               voteCounts,
             });
