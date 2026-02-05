@@ -44,6 +44,8 @@ export class Room {
     this.createdAt = Date.now(); // Set creation timestamp
     this.connectedSockets = new Map();
     this.isEnded = false;
+    this.lastVotingResult = null;
+    this.lastNightResult = null;
 
     // Add host as first player
     this.addPlayer(hostId, hostName, true);
