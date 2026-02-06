@@ -7,6 +7,7 @@ import { RoomManager } from "./services/RoomManager.js";
 import { GameTimer } from "./services/GameTimer.js";
 import { RedisService } from "./services/RedisService.js";
 import { setupSocketHandlers } from "./handlers/socketHandlers.js";
+import { createAdminRouter } from "./routes/admin.js";
 
 // Load environment variables
 dotenv.config();
@@ -19,6 +20,7 @@ const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
   : [
       "http://localhost:5173",
+      "http://localhost:5174",
       "http://192.168.1.5:5173",
       "http://localhost:3000",
     ];
@@ -48,7 +50,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Admin-Token"],
 };
 
 app.use(cors(corsOptions));
@@ -147,6 +149,22 @@ const io = new Server(httpServer, {
 const redisService = new RedisService();
 const roomManager = new RoomManager(redisService);
 const gameTimer = new GameTimer(io, redisService);
+
+// Peak users tracking
+let peakUsers = 0;
+function getConnectedCount() {
+  return io.sockets.sockets.size;
+}
+function getPeakUsers() {
+  return peakUsers;
+}
+function updatePeakUsers() {
+  const count = io.sockets.sockets.size;
+  if (count > peakUsers) peakUsers = count;
+}
+
+// Admin API
+app.use("/admin", createAdminRouter(io, roomManager, redisService, getConnectedCount, getPeakUsers, updatePeakUsers));
 
 // Setup socket handlers
 setupSocketHandlers(io, roomManager, gameTimer, redisService);
