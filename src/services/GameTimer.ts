@@ -1,8 +1,9 @@
 import { v4 as uuidv4 } from "uuid";
 import { Room } from "../models/Room.js";
 import { Server } from "socket.io";
-import { ClientToServerEvents, ServerToClientEvents } from "../types/socket.js";
+import { ChatMessage, ClientToServerEvents, ServerToClientEvents } from "../types/socket.js";
 import { RedisService } from "./RedisService.js";
+import { t } from "../i18n/index.js";
 
 export class GameTimer {
   private timers: Map<string, NodeJS.Timeout>; // roomCode -> timer
@@ -90,16 +91,19 @@ export class GameTimer {
       return;
     }
 
-    // Send system message about morning
-    const morningMessage = {
+    // Send system message about morning (use uz as default for storage, client translates)
+    const morningText = t("uz", "morningFalls");
+    const morningMessage: ChatMessage = {
       id: uuidv4(),
       senderId: "system",
-      senderName: "Система",
-      text: "Наступило утро. Город просыпается...",
+      senderName: t("uz", "system"),
+      text: morningText,
       timestamp: Date.now(),
       isSystem: true,
+      translationKey: "morningFalls",
+      translationParams: [],
     };
-    room.addChatMessage("system", "Система", morningMessage.text, true);
+    room.addChatMessage("system", "Система", morningText, true);
     this.io.to(room.getCode()).emit("chat:message", morningMessage);
 
     // Start discussion
@@ -306,16 +310,19 @@ export class GameTimer {
       return;
     }
 
-    // Send system message about night starting
-    const nightMessage = {
+    // Send system message about night starting (use uz as default for storage, client translates)
+    const nightText = t("uz", "nightMafiaWakes");
+    const nightMessage: ChatMessage = {
       id: uuidv4(),
       senderId: "system",
-      senderName: "Система",
-      text: "Наступила ночь. Мафия просыпается...",
+      senderName: t("uz", "system"),
+      text: nightText,
       timestamp: Date.now(),
       isSystem: true,
+      translationKey: "nightMafiaWakes",
+      translationParams: [],
     };
-    room.addChatMessage("system", "Система", nightMessage.text, true);
+    room.addChatMessage("system", "Система", nightText, true);
     this.io.to(room.getCode()).emit("chat:message", nightMessage);
     
     // Move to next night

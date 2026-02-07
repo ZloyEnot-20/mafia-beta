@@ -62,8 +62,8 @@ export interface ServerToClientEvents {
 
 export interface ClientToServerEvents {
   // Room events
-  "room:create": (playerName: string, playerId?: string) => void;
-  "room:join": (data: { roomCode: string; playerName: string; playerId?: string }) => void;
+  "room:create": (playerName: string, playerId?: string, lang?: "uz" | "ru") => void;
+  "room:join": (data: { roomCode: string; playerName: string; playerId?: string; lang?: "uz" | "ru" }) => void;
   "room:leave": () => void;
   "room:delete": () => void;
   "room:check-active": (playerId: string) => void; // Check if player has active room
@@ -87,4 +87,6 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   isSystem?: boolean;
+  translationKey?: string;
+  translationParams?: unknown[];
 }

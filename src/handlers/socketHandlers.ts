@@ -9,8 +9,11 @@ import { GameTimer } from "../services/GameTimer.js";
 import { RedisService } from "../services/RedisService.js";
 import { GameSettings } from "../types/game.js";
 import { v4 as uuidv4 } from "uuid";
+import { t, type Language } from "../i18n/index.js";
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
+
+const socketLang = new Map<string, Language>();
 
 /**
  * Helper function to find playerId by socket.id
@@ -120,7 +123,7 @@ export function setupSocketHandlers(
     });
 
     // Room: Create
-    socket.on("room:create", async (playerName: string, playerId?: string) => {
+    socket.on("room:create", async (playerName: string, playerId?: string, lang?: Language) => {
       try {
         // Use persistent playerId if provided, otherwise fallback to socket.id
         const persistentPlayerId = playerId || socket.id;
@@ -143,6 +146,9 @@ export function setupSocketHandlers(
           maxPlayers: parseInt(process.env.MAX_PLAYERS || "16"),
         };
 
+        const playerLang = lang === "ru" ? "ru" : "uz";
+        socketLang.set(socket.id, playerLang);
+
         const room = await roomManager.createRoom(persistentPlayerId, playerName, defaultSettings);
         room.setSocketConnection(persistentPlayerId, socket.id);
         socket.join(room.getCode());
@@ -153,16 +159,20 @@ export function setupSocketHandlers(
           createdAt: room.getCreatedAt(),
         });
       } catch (error) {
-        socket.emit("error", error instanceof Error ? error.message : "Ошибка создания комнаты");
+        const playerLang = socketLang.get(socket.id) ?? "uz";
+        socket.emit("error", error instanceof Error ? error.message : t(playerLang, "errorCreateRoom"));
       }
     });
 
     // Room: Join
-    socket.on("room:join", async ({ roomCode, playerName, playerId: providedPlayerId }) => {
+    socket.on("room:join", async ({ roomCode, playerName, playerId: providedPlayerId, lang: clientLang }) => {
       try {
+        const playerLang = clientLang === "ru" ? "ru" : "uz";
+        socketLang.set(socket.id, playerLang);
+
         // Validate input
         if (!roomCode || !playerName) {
-          socket.emit("error", "Код комнаты и имя игрока обязательны");
+          socket.emit("error", t(playerLang, "roomCodeAndNameRequired"));
           return;
         }
 
@@ -198,7 +208,7 @@ export function setupSocketHandlers(
         
         const roomResult = await roomManager.joinRoom(normalizedCode, playerId, playerName);
         if (!roomResult) {
-          socket.emit("error", "Комната не найдена");
+          socket.emit("error", t(playerLang, "roomNotFound"));
           return;
         }
 
@@ -223,13 +233,15 @@ export function setupSocketHandlers(
           const player = roomResult.getPlayer(playerId);
           if (player) {
             // Send system message about reconnection only if player was disconnected
-            const reconnectMessage = {
+            const reconnectMessage: ChatMessage = {
               id: uuidv4(),
               senderId: "system",
-              senderName: "Система",
-              text: `${player.name} переподключился к игре`,
+              senderName: t(playerLang, "system"),
+              text: t(playerLang, "playerReconnected", player.name),
               timestamp: Date.now(),
               isSystem: true,
+              translationKey: "playerReconnected",
+              translationParams: [player.name],
             };
             roomResult.addChatMessage("system", "Система", reconnectMessage.text, true);
             io.to(roomResult.getCode()).emit("chat:message", reconnectMessage);
@@ -372,7 +384,8 @@ export function setupSocketHandlers(
           socket.emit("room:host-changed", roomResult.getHostId());
         }
       } catch (error) {
-        socket.emit("error", error instanceof Error ? error.message : "Ошибка входа в комнату");
+        const playerLang = socketLang.get(socket.id) ?? "uz";
+        socket.emit("error", error instanceof Error ? error.message : t(playerLang, "errorJoinRoom"));
       }
     });
 
@@ -411,8 +424,9 @@ export function setupSocketHandlers(
     // Room: Delete
     socket.on("room:delete", async () => {
       const playerInfo = findPlayerIdBySocket(socket.id, roomManager);
+      const playerLang = socketLang.get(socket.id) ?? "uz";
       if (!playerInfo || !playerInfo.room) {
-        socket.emit("error", "Вы не в комнате");
+        socket.emit("error", t(playerLang, "errorRoomRequired"));
         return;
       }
       await roomManager.deleteRoom(playerInfo.room.getCode());
@@ -421,15 +435,16 @@ export function setupSocketHandlers(
     // Game: Start
     socket.on("game:start", async () => {
       const playerInfo = findPlayerIdBySocket(socket.id, roomManager);
+      const playerLang = socketLang.get(socket.id) ?? "uz";
       if (!playerInfo || !playerInfo.room) {
-        socket.emit("error", "Вы не в комнате");
+        socket.emit("error", t(playerLang, "errorRoomRequired"));
         return;
       }
       
       const { playerId, room } = playerInfo;
       const player = room.getPlayer(playerId);
       if (!player?.isHost) {
-        socket.emit("error", "Только хост может начать игру");
+        socket.emit("error", t(playerLang, "errorHostOnly"));
         return;
       }
 
@@ -470,27 +485,28 @@ export function setupSocketHandlers(
         // Set to 24 hours (86400 seconds) to keep room alive during the game
         await redisService.saveRoom(room, 86400);
       } catch (error) {
-        socket.emit("error", error instanceof Error ? error.message : "Ошибка начала игры");
+        socket.emit("error", error instanceof Error ? error.message : t(playerLang, "errorHostOnly"));
       }
     });
 
     // Action: Night Action
     socket.on("action:night-action", async (targetId: string) => {
       const playerInfo = findPlayerIdBySocket(socket.id, roomManager);
+      const playerLang = socketLang.get(socket.id) ?? "uz";
       if (!playerInfo || !playerInfo.room) {
-        socket.emit("error", "Вы не в комнате");
+        socket.emit("error", t(playerLang, "errorRoomRequired"));
         return;
       }
       
       const { playerId, room } = playerInfo;
       if (room.getPhase() !== "night") {
-        socket.emit("error", "Неверная фаза игры");
+        socket.emit("error", t(playerLang, "errorInvalidPhase"));
         return;
       }
 
       const player = room.getPlayer(playerId);
       if (!player?.isAlive) {
-        socket.emit("error", "Мертвые игроки не могут действовать");
+        socket.emit("error", t(playerLang, "errorDeadCannotAct"));
         return;
       }
 
@@ -538,20 +554,21 @@ export function setupSocketHandlers(
     // Action: Vote
     socket.on("action:vote", async (targetId: string) => {
       const playerInfo = findPlayerIdBySocket(socket.id, roomManager);
+      const playerLang = socketLang.get(socket.id) ?? "uz";
       if (!playerInfo || !playerInfo.room) {
-        socket.emit("error", "Вы не в комнате");
+        socket.emit("error", t(playerLang, "errorRoomRequired"));
         return;
       }
       
       const { playerId, room } = playerInfo;
       if (room.getPhase() !== "voting") {
-        socket.emit("error", "Неверная фаза игры");
+        socket.emit("error", t(playerLang, "errorInvalidPhase"));
         return;
       }
 
       const player = room.getPlayer(playerId);
       if (!player?.isAlive) {
-        socket.emit("error", "Мертвые игроки не могут голосовать");
+        socket.emit("error", t(playerLang, "errorDeadCannotVote"));
         return;
       }
 
@@ -559,7 +576,7 @@ export function setupSocketHandlers(
       const discussionState = room.getDiscussionState();
       if (discussionState?.isIndividualPhase) {
         if (discussionState.currentSpeakerId !== playerId) {
-          socket.emit("error", "Не ваша очередь голосовать");
+          socket.emit("error", t(playerLang, "errorNotYourTurn"));
           return;
         }
       }
@@ -567,7 +584,7 @@ export function setupSocketHandlers(
       try {
         room.vote(playerId, targetId);
       } catch (error) {
-        socket.emit("error", error instanceof Error ? error.message : "Ошибка при голосовании");
+        socket.emit("error", error instanceof Error ? error.message : t(playerLang, "errorVoting"));
         return;
       }
 
@@ -578,28 +595,29 @@ export function setupSocketHandlers(
       });
 
       // Add chat message
-      const targetPlayer = room.getPlayer(targetId);
-      if (targetPlayer) {
-        const alivePlayers = room.getAlivePlayers();
-        const voterIndex = alivePlayers.findIndex((p) => p.id === playerId) + 1;
-        const targetIndex = alivePlayers.findIndex((p) => p.id === targetId) + 1;
-        // Send plain text message without HTML
-        const message = `${player.name} (${voterIndex}) проголосовал против ${targetPlayer.name} (${targetIndex})`;
-        room.addChatMessage(
-          "system",
-          "Система",
-          message,
-          true
-        );
-        io.to(room.getCode()).emit("chat:message", {
-          id: uuidv4(),
-          senderId: "system",
-          senderName: "Система",
-          text: message,
-          timestamp: Date.now(),
-          isSystem: true,
-        });
-      }
+        const targetPlayer = room.getPlayer(targetId);
+        if (targetPlayer) {
+          const alivePlayers = room.getAlivePlayers();
+          const voterIndex = alivePlayers.findIndex((p) => p.id === playerId) + 1;
+          const targetIndex = alivePlayers.findIndex((p) => p.id === targetId) + 1;
+          const messageText = t(playerLang, "votedAgainstFull", player.name, voterIndex, targetPlayer.name, targetIndex);
+          room.addChatMessage(
+            "system",
+            "Система",
+            messageText,
+            true
+          );
+          io.to(room.getCode()).emit("chat:message", {
+            id: uuidv4(),
+            senderId: "system",
+            senderName: t(playerLang, "system"),
+            text: messageText,
+            timestamp: Date.now(),
+            isSystem: true,
+            translationKey: "votedAgainstFull",
+            translationParams: [player.name, voterIndex, targetPlayer.name, targetIndex],
+          });
+        }
 
       // If it's individual voting phase, move to next voter immediately after vote
       // Reuse discussionState from above (line 559)
@@ -658,15 +676,20 @@ export function setupSocketHandlers(
             }
 
             // Send system message about night starting
-            const nightMessage = {
+            const hostPlayer = room.getPlayer(room.getHostId());
+            const hostLang = hostPlayer ? (socketLang.get(room.getSocketId(hostPlayer.id) ?? "") ?? "uz") : "uz";
+            const nightText = t(hostLang, "nightFalls");
+            const nightMessage: ChatMessage = {
               id: uuidv4(),
               senderId: "system",
-              senderName: "Система",
-              text: "Наступает ночь. Город засыпает...",
+              senderName: t(hostLang, "system"),
+              text: nightText,
               timestamp: Date.now(),
               isSystem: true,
+              translationKey: "nightFalls",
+              translationParams: [],
             };
-            room.addChatMessage("system", "Система", nightMessage.text, true);
+            room.addChatMessage("system", "Система", nightText, true);
             io.to(room.getCode()).emit("chat:message", nightMessage);
 
           // Move to night phase
@@ -730,15 +753,20 @@ export function setupSocketHandlers(
           }
 
           // Send system message about night starting
-          const nightMessage = {
+          const hostPlayer = room.getPlayer(room.getHostId());
+          const hostLang = hostPlayer ? (socketLang.get(room.getSocketId(hostPlayer.id) ?? "") ?? "uz") : "uz";
+          const nightText = t(hostLang, "nightMafiaWakes");
+          const nightMessage: ChatMessage = {
             id: uuidv4(),
             senderId: "system",
-            senderName: "Система",
-            text: "Наступила ночь. Мафия просыпается...",
+            senderName: t(hostLang, "system"),
+            text: nightText,
             timestamp: Date.now(),
             isSystem: true,
+            translationKey: "nightMafiaWakes",
+            translationParams: [],
           };
-          room.addChatMessage("system", "Система", nightMessage.text, true);
+          room.addChatMessage("system", "Система", nightText, true);
           io.to(room.getCode()).emit("chat:message", nightMessage);
 
           // Move to night phase
@@ -769,8 +797,9 @@ export function setupSocketHandlers(
     // Chat: Send
     socket.on("chat:send", async (text: string) => {
       const playerInfo = findPlayerIdBySocket(socket.id, roomManager);
+      const playerLang = socketLang.get(socket.id) ?? "uz";
       if (!playerInfo || !playerInfo.room) {
-        socket.emit("error", "Вы не в комнате");
+        socket.emit("error", t(playerLang, "errorRoomRequired"));
         return;
       }
       
@@ -778,9 +807,9 @@ export function setupSocketHandlers(
       const player = room.getPlayer(playerId);
       if (!player) return;
       
-      // Dead players cannot send messages (except after game ended — тогда все могут писать)
+      // Dead players cannot send messages (except after game ended)
       if (!player.isAlive && room.getPhase() !== "ended") {
-        socket.emit("error", "Мертвые игроки не могут писать в чат");
+        socket.emit("error", t(playerLang, "errorDeadCannotChat"));
         return;
       }
 
@@ -832,6 +861,7 @@ export function setupSocketHandlers(
 
     // Disconnect
     socket.on("disconnect", async () => {
+      socketLang.delete(socket.id);
       console.log(`Client disconnected: ${socket.id}`);
       // Get player info before leaving room
       const playerInfo = findPlayerIdBySocket(socket.id, roomManager);
@@ -845,16 +875,21 @@ export function setupSocketHandlers(
           // Game has started, don't remove player, just notify about disconnection
           const disconnectedPlayer = roomBeforeLeave.getPlayer(removedPlayerId);
           if (disconnectedPlayer) {
-            // Send system message to chat about disconnection
-            const disconnectMessage = {
+            const hostPlayer = roomBeforeLeave.getPlayer(roomBeforeLeave.getHostId());
+            const hostSocketId = hostPlayer ? roomBeforeLeave.getSocketId(hostPlayer.id) : undefined;
+            const msgLang = hostSocketId ? (socketLang.get(hostSocketId) ?? "uz") : "uz";
+            const disconnectText = t(msgLang, "playerDisconnected", disconnectedPlayer.name);
+            const disconnectMessage: ChatMessage = {
               id: uuidv4(),
               senderId: "system",
-              senderName: "Система",
-              text: `${disconnectedPlayer.name} отключился от игры`,
+              senderName: t(msgLang, "system"),
+              text: disconnectText,
               timestamp: Date.now(),
               isSystem: true,
+              translationKey: "playerDisconnected",
+              translationParams: [disconnectedPlayer.name],
             };
-            roomBeforeLeave.addChatMessage("system", "Система", disconnectMessage.text, true);
+            roomBeforeLeave.addChatMessage("system", "Система", disconnectText, true);
             io.to(roomBeforeLeave.getCode()).emit("chat:message", disconnectMessage);
           }
           
@@ -874,7 +909,8 @@ export function setupSocketHandlers(
       }
       
       if (playerId) {
-        const leavingPlayer = roomBeforeLeave?.getPlayer(playerId) || { id: playerId, name: "Игрок" };
+        socketLang.delete(socket.id);
+        const leavingPlayer = roomBeforeLeave?.getPlayer(playerId) || { id: playerId, name: "Player" };
         const room = await roomManager.leaveRoom(playerId);
         if (room) {
           socket.to(room.getCode()).emit("room:player-left", {
