@@ -774,8 +774,8 @@ export function setupSocketHandlers(
       const player = room.getPlayer(playerId);
       if (!player) return;
       
-      // Dead players cannot send messages
-      if (!player.isAlive) {
+      // Dead players cannot send messages (except after game ended — тогда все могут писать)
+      if (!player.isAlive && room.getPhase() !== "ended") {
         socket.emit("error", "Мертвые игроки не могут писать в чат");
         return;
       }
