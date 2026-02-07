@@ -489,6 +489,9 @@ export class Room {
 
   setIsEnded(ended: boolean): void {
     this.isEnded = ended;
+    if (ended) {
+      this.phase = "ended";
+    }
   }
 
   setLastVotingResult(result: { eliminatedId: string | null; isTie: boolean; votes: Record<string, number> }): void {
