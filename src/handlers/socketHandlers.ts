@@ -617,6 +617,8 @@ export function setupSocketHandlers(
             // Restart timer for next voter
             gameTimer.startTimer(room);
           } else {
+            // Edge case: hasNext but no valid next state — stop timer and process
+            gameTimer.stopTimer(room.getCode());
             // No more voters, process voting
             const result = room.processVoting();
             io.to(room.getCode()).emit("action:vote-result", {
@@ -687,6 +689,8 @@ export function setupSocketHandlers(
           gameTimer.startTimer(room);
           }
         } else {
+          // Last player voted — stop timer immediately so we don't wait for remaining time
+          gameTimer.stopTimer(room.getCode());
           // No more voters, process voting
           const result = room.processVoting();
           io.to(room.getCode()).emit("action:vote-result", {

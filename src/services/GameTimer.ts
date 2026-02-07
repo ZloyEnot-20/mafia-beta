@@ -35,6 +35,7 @@ export class GameTimer {
     this.timers.set(room.getCode(), timer);
   }
 
+  /** Stops the timer for a room. Public so vote handler can stop timer when last player votes early. */
   stopTimer(roomCode: string): void {
     const timer = this.timers.get(roomCode);
     if (timer) {
